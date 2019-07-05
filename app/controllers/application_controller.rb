@@ -37,7 +37,7 @@ class ApplicationController < ActionController::Base
   end
 
   def authorized_fetch_mode?
-    ENV['AUTHORIZED_FETCH'] == 'true'
+    ENV['AUTHORIZED_FETCH'] == 'true' || Rails.configuration.x.whitelist_mode
   end
 
   def public_fetch_mode?
