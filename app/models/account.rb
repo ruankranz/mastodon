@@ -77,7 +77,7 @@ class Account < ApplicationRecord
   validates :username, format: { with: /\A#{USERNAME_RE}\z/i }, if: -> { !local? && will_save_change_to_username? }
 
   # Local user validations
-  validates :username, format: { with: /\A[a-z0-9_]+\z/i }, length: { maximum: 30 }, if: -> { local? && will_save_change_to_username? }
+  validates :username, format: { with: /\A[a-z0-9_]+\z/i }, length: { maximum: 30 }, if: -> { local? && will_save_change_to_username? && actor_type != 'Application' }
   validates_with UniqueUsernameValidator, if: -> { local? && will_save_change_to_username? }
   validates_with UnreservedUsernameValidator, if: -> { local? && will_save_change_to_username? }
   validates :display_name, length: { maximum: 30 }, if: -> { local? && will_save_change_to_display_name? }
@@ -137,6 +137,10 @@ class Account < ApplicationRecord
 
   def bot?
     %w(Application Service).include? actor_type
+  end
+
+  def instance_actor?
+    id == -99
   end
 
   alias bot bot?
@@ -223,17 +227,7 @@ class Account < ApplicationRecord
   end
 
   def tags_as_strings=(tag_names)
-    tag_names.map! { |name| name.mb_chars.downcase.to_s }
-    tag_names.uniq!
-
-    # Existing hashtags
-    hashtags_map = Tag.where(name: tag_names).each_with_object({}) { |tag, h| h[tag.name] = tag }
-
-    # Initialize not yet existing hashtags
-    tag_names.each do |name|
-      next if hashtags_map.key?(name)
-      hashtags_map[name] = Tag.new(name: name)
-    end
+    hashtags_map = Tag.find_or_create_by_names(tag_names).each_with_object({}) { |tag, h| h[tag.name] = tag }
 
     # Remove hashtags that are to be deleted
     tags.each do |tag|
@@ -498,7 +492,7 @@ class Account < ApplicationRecord
   end
 
   def generate_keys
-    return unless local? && !Rails.env.test?
+    return unless local? && private_key.blank? && public_key.blank?
 
     keypair = OpenSSL::PKey::RSA.new(2048)
     self.private_key = keypair.to_pem
@@ -512,7 +506,7 @@ class Account < ApplicationRecord
   end
 
   def emojifiable_text
-    [note, display_name, fields.map(&:value)].join(' ')
+    [note, display_name, fields.map(&:name), fields.map(&:value)].join(' ')
   end
 
   def clean_feed_manager

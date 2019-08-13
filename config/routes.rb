@@ -28,9 +28,16 @@ Rails.application.routes.draw do
   get 'intent', to: 'intents#show'
   get 'custom.css', to: 'custom_css#show', as: :custom_css
 
+  resource :instance_actor, path: 'actor', only: [:show] do
+    resource :inbox, only: [:create], module: :activitypub
+  end
+
   devise_scope :user do
     get '/invite/:invite_code', to: 'auth/registrations#new', as: :public_invite
-    match '/auth/finish_signup' => 'auth/confirmations#finish_signup', via: [:get, :patch], as: :finish_signup
+
+    namespace :auth do
+      resource :setup, only: [:show, :update], controller: :setup
+    end
   end
 
   devise_for :users, path: 'auth', controllers: {
@@ -147,7 +154,12 @@ Rails.application.routes.draw do
   namespace :admin do
     get '/dashboard', to: 'dashboard#index'
 
-    resources :domain_blocks, only: [:new, :create, :show, :destroy]
+    resources :domain_allows, only: [:new, :create, :show, :destroy]
+    resources :domain_blocks, only: [:new, :create, :show, :destroy, :update] do
+      member do
+        get :edit
+      end
+    end
     resources :email_domain_blocks, only: [:index, :new, :create, :destroy]
     resources :action_logs, only: [:index]
     resources :warning_presets, except: [:new]
@@ -235,13 +247,7 @@ Rails.application.routes.draw do
     end
 
     resources :account_moderation_notes, only: [:create, :destroy]
-
-    resources :tags, only: [:index] do
-      member do
-        post :hide
-        post :unhide
-      end
-    end
+    resources :tags, only: [:index, :show, :update]
   end
 
   get '/admin', to: redirect('/admin/dashboard', status: 302)
@@ -303,6 +309,7 @@ Rails.application.routes.draw do
       resources :mutes,        only: [:index]
       resources :favourites,   only: [:index]
       resources :reports,      only: [:create]
+      resources :trends,       only: [:index]
       resources :filters,      only: [:index, :create, :show, :update, :destroy]
       resources :endorsements, only: [:index]
 
